@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Work Schedule</title>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+const SHIFTS = [
+  { id:"s1", label:"15:00 – 19:00", hours:4  },
+  { id:"s2", label:"19:00 – 23:00", hours:4  },
+  { id:"s3", label:"23:00 – 07:00", hours:8  },
+];
+
+const DAYS_S = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const DAYS_F = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+const MONTHS_S = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const MONTHS_F = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+function addDays(dt,n){ const d=new Date(dt); d.setDate(d.getDate()+n); return d; }
+
+function emptyDay(){
+  return {
+    status:"Work",
+    shifts:{
+      s1:{ipeh:"IP",role:"Floor",unit:""},
+      s2:{ipeh:"IP",role:"Floor",unit:""},
+      s3:{ipeh:"IP",role:"Floor",unit:""}
+    }
+  };
+}
+
+const FIRST_SUNDAY = new Date(2026,5,14);
+
+function buildPeriods(){
+  return Array.from({length:6},(_,i)=>{
+    const start = addDays(FIRST_SUNDAY,i*14);
+    const end = addDays(start,13);
+    const days = Array.from({length:14},(_,d)=>addDays(start,d));
+    return {id:i,start,end,days};
+  });
+}
+
+const PERIODS = buildPeriods();
+
+function buildInitialSchedule(periods){
+  const s={};
+  periods.forEach(p=>p.days.forEach(dt=>{
+    s[dt.toDateString()] = emptyDay();
+  }));
+  return s;
+}
+
+function App(){
+  const today = new Date();
+
+  const [schedule,setSchedule] = useState(()=>{
+    try{
+      const saved = localStorage.getItem("myWorkSchedule");
+      if(saved) return JSON.parse(saved);
+    }catch(e){}
+    return buildInitialSchedule(PERIODS);
+  });
+
+  const [payAmounts,setPayAmounts] = useState(()=>{
+    try{
+      const saved = localStorage.getItem("myWorkPay");
+      if(saved) return JSON.parse(saved);
+    }catch(e){}
+    return {};
+  });
+
+  useEffect(()=>{
+    localStorage.setItem("myWorkSchedule",JSON.stringify(schedule));
+  },[schedule]);
+
+  useEffect(()=>{
+    localStorage.setItem("myWorkPay",JSON.stringify(payAmounts));
+  },[payAmounts]);
+
+  const [activePeriod,setActivePeriod]=useState(0);
+
+  const period = PERIODS[activePeriod];
+
+  function updateStatus(key,status){
+    setSchedule(prev=>({
+      ...prev,
+      [key]:{...prev[key],status}
+    }));
+  }
+
+  function updateShift(key,shiftId,field,value){
+    setSchedule(prev=>({
+      ...prev,
+      [key]:{
+        ...prev[key],
+        shifts:{
+          ...prev[key].shifts,
+          [shiftId]:{
+            ...prev[key].shifts[shiftId],
+            [field]:value
+          }
+        }
+      }
+    }));
+  }
+
+  let totalHours=0;
+  period.days.forEach(dt=>{
+    const d = schedule[dt.toDateString()];
+    if(!d || d.status==="Off") return;
+    SHIFTS.forEach(s=> totalHours+=s.hours);
+  });
+
+  return (
+    <div>
+      <h2>Work Schedule</h2>
+      <p>Total Hours: {totalHours}</p>
+
+      {period.days.map(dt=>{
+        const key = dt.toDateString();
+        const day = schedule[key] || emptyDay();
+
+        return (
+          <div key={key} style={{border:"1px solid #ccc",margin:10,padding:10}}>
+            <div>{key}</div>
+
+            <button onClick={()=>updateStatus(key,"Work")}>Work</button>
+            <button onClick={()=>updateStatus(key,"Off")}>Off</button>
+
+            {SHIFTS.map(sh=>(
+              <div key={sh.id}>
+                <div>{sh.label}</div>
+                <input
+                  placeholder="Unit"
+                  value={day.shifts[sh.id].unit}
+                  onChange={e=>updateShift(key,sh.id,"unit",e.target.value)}
+                />
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
